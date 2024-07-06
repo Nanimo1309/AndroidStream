@@ -1,0 +1,7 @@
+<resources>
+    <string name="appName">Android Stream</string>
+    <string name="streamButton">Start</string>
+    <string name="streamButtonError">No access</string>
+    <string name="streamButtonStream">Streaming</string>
+    <string name="streamButtonCannotConnect">Connect Error</string>
+</resources>
