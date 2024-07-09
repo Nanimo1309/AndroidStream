@@ -10,7 +10,6 @@
     <androidx.appcompat.widget.AppCompatButton
         style="@style/AndroidTest.button"
         android:id="@+id/stream_button"
-        android:text="@string/streamButton"
 
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"

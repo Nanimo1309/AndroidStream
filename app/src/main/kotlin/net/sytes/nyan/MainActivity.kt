@@ -1,26 +1,34 @@
 package net.sytes.nyan
 
+import android.content.BroadcastReceiver
+import android.content.Context
 import androidx.core.app.ActivityCompat
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatButton
 
 import android.os.Bundle
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.view.ContextThemeWrapper
-
-import android.media.MediaRecorder
-import android.media.AudioRecord
-import android.media.AudioFormat
-
-import java.net.Socket
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 import net.sytes.nyan.databinding.MainActivityBinding
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: MainActivityBinding
     private lateinit var button: AppCompatButton
-    private var sendingThread: Thread? = null
-    private var isRecording: Boolean = false
+
+    private val connectionErrorReceiver = object: BroadcastReceiver(){
+        override fun onReceive(context: Context, intent: Intent) {
+            button.text = when(intent.action){
+                "StartStream" -> getString(R.string.streamButtonStream)
+                "StopStream" -> getString(R.string.streamButton)
+                "ConnectionError" -> getString(R.string.streamButtonCannotConnect)
+                else -> ""
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,7 +37,22 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         button = binding.streamButton
+
+        if(SendService.enabled())
+            button.text = getString(R.string.streamButtonStream)
+        else
+            button.text = getString(R.string.streamButton)
+
         button.setOnClickListener { _ -> stream() }
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            connectionErrorReceiver,
+            IntentFilter().apply {
+                addAction("StartStream")
+                addAction("ConnectionError")
+                addAction("StopStream")
+            }
+        )
     }
 
     private fun checkPermission(): Boolean {
@@ -53,73 +76,25 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
         if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            button.text = getString(R.string.streamButton)
+                button.text = getString(R.string.streamButton)
+
             button.background =
                 AppCompatButton(ContextThemeWrapper(this, R.style.AndroidTest_button), null, 0).background
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(connectionErrorReceiver)
+    }
+
     private fun stream() {
         if (checkPermission()) {
-            if (!isRecording) {
-                sendingThread = Thread {
-                    isRecording = true
-
-                    try {
-                        val socket = Socket("192.168.1.254", 6969)
-
-                        runOnUiThread {
-                            button.text = getString(R.string.streamButtonStream)
-                        }
-
-                        val channelMask = AudioFormat.CHANNEL_IN_MONO
-                        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-                        val sampleRate = 32000
-                        val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelMask, audioFormat)
-
-                        val recorder = AudioRecord.Builder()
-                            .setAudioSource(MediaRecorder.AudioSource.MIC)
-                            .setAudioFormat(
-                                AudioFormat.Builder()
-                                    .setSampleRate(sampleRate)
-                                    .setChannelMask(channelMask)
-                                    .setEncoding(audioFormat)
-                                    .build()
-                            )
-                            .setBufferSizeInBytes(bufferSize)
-                            .build()
-
-                        recorder.startRecording()
-
-                        val outputStream = socket.getOutputStream()
-                        val buffer = ByteArray(bufferSize)
-
-                        while (isRecording) {
-                            val read = recorder.read(buffer, 0, buffer.size)
-                            if (read > 0)
-                                outputStream.write(buffer, 0, read)
-                        }
-
-                        outputStream.close()
-                        socket.close()
-                        recorder.stop()
-                        recorder.release()
-
-                        runOnUiThread {
-                            button.text = getString(R.string.streamButton)
-                        }
-                    } catch (e: Exception) {
-                        runOnUiThread {
-                            button.text = getString(R.string.streamButtonCannotConnect)
-                        }
-                        isRecording = false
-                    }
-                }
-
-                sendingThread!!.start()
+            if (!SendService.enabled()) {
+                startService(Intent(this, SendService::class.java))
             } else {
-                isRecording = false
-                sendingThread!!.join()
+                stopService(Intent(this, SendService::class.java))
             }
         }
     }
