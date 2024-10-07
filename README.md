@@ -1,4 +1,4 @@
-# Application for stream android microphone input to your linux pc
+# Application to stream android microphone input to your linux pc
 
 Remember to change ip and port for your own
 
